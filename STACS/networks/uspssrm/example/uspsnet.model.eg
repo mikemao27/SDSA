@@ -1,0 +1,181 @@
+---
+type: stream
+modname: yarpusps
+modtype: yimg_usps_epis
+param:
+  - name: npxl
+    value: 256
+  - name: ampl
+    value: 24.0
+port:
+  - name: in
+    value: /stacs/image
+...
+
+---
+type: vertex
+modname: srmex
+modtype: srm_neuron
+param:
+  - name: vrest
+    value: -65.0
+  - name: vthresh
+    value: -50.0
+  - name: tau
+    value: 3.0
+  - name: tabs
+    value: 7.0
+state:
+  - name: v_app
+    init: constant
+    value: 0.0
+  - name: v
+    init: constant
+    value: 0.0
+  - name: tlast
+    init: constant
+    rep: tick
+    value: 0.0
+...
+
+---
+type: vertex
+modname: srmin
+modtype: srm_neuron
+param:
+  - name: vrest
+    value: -65.0
+  - name: vthresh
+    value: -50.0
+  - name: tau
+    value: 3.0
+  - name: tabs
+    value: 7.0
+state:
+  - name: v_app
+    init: constant
+    value: 0.0
+  - name: v
+    init: constant
+    value: 0.0
+  - name: tlast
+    init: constant
+    rep: tick
+    value: 0.0
+...
+
+---
+type: vertex
+modname: inpxl
+modtype: srm_neuron
+param:
+  - name: vrest
+    value: -65.0
+  - name: vthresh
+    value: -50.0
+  - name: tau
+    value: 3.0
+  - name: tabs
+    value: 7.0
+state:
+  - name: v_app
+    init: constant
+    value: 0.0
+  - name: v
+    init: constant
+    value: 0.0
+  - name: tlast
+    init: constant
+    rep: tick
+    value: 0.0
+...
+
+---
+type: edge
+modname: exstdp
+modtype: srm_syn_exstdp
+param:
+  - name: wmax
+    value: 1.2
+  - name: alpha
+    value: 0.1
+  - name: pdw
+    value: 1.0
+  - name: ptau
+    value: 20.0
+  - name: ndw
+    value: 0.5
+  - name: ntau
+    value: 100.0
+state:
+  - name: delay
+    init: uniform interval
+    rep: tick
+    min: 1.0
+    max: 20.0
+    int: 1.0
+  - name: weight
+    init: constant
+    value: 0.5
+  - name: tlast
+    init: constant
+    rep: tick
+    value: 0.0
+...
+
+---
+type: edge
+modname: instdp
+modtype: srm_syn_instdp
+param:
+  - name: wmax
+    value: -0.9
+  - name: alpha
+    value: 0.1
+  - name: pdw
+    value: 1.0
+  - name: ptau
+    value: 20.0
+  - name: ndw
+    value: 0.25
+state:
+  - name: delay
+    init: uniform interval
+    rep: tick
+    min: 1.0
+    max: 20.0
+    int: 1.0
+  - name: weight
+    init: constant
+    value: -0.5
+  - name: tlast
+    init: constant
+    rep: tick
+    value: 0.0
+...
+
+---
+type: edge
+modname: exnostdp
+modtype: srm_syn_nostdp
+param:
+  - name: weight
+    value: 3.0
+state:
+  - name: delay
+    init: constant
+    rep: tick
+    value: 1.0
+...
+
+---
+type: edge
+modname: stimpxl
+modtype: srm_syn_stim
+param:
+state:
+  - name: delay
+    init: constant
+    rep: tick
+    value: 1.0
+...

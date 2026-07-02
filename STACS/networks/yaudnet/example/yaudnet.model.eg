@@ -1,0 +1,202 @@
+---
+type: stream
+modname: yarpaudio
+modtype: yaud_winmfcc
+param:
+  - name: nmel
+    value: 30
+port:
+  - name: in
+    value: /stacs/audio
+...
+
+---
+type: vertex
+modname: izhiex
+modtype: izhi_neuron
+param:
+  - name: a
+    value: 0.02
+  - name: b
+    value: 0.2
+  - name: c
+    value: -65
+  - name: d
+    value: 8
+state:
+  - name: v
+    init: constant
+    value: -65.0
+  - name: u
+    init: constant
+    value: -13.0
+  - name: I_syn
+    init: constant
+    value: 0.0
+  - name: I_app
+    init: constant
+    value: 0.0
+...
+
+---
+type: vertex
+modname: izhiin
+modtype: izhi_neuron
+param:
+  - name: a
+    value: 0.1
+  - name: b
+    value: 0.2
+  - name: c
+    value: -65
+  - name: d
+    value: 2
+state:
+  - name: v
+    init: constant
+    value: -65.0
+  - name: u
+    init: constant
+    value: -13.0
+  - name: I_syn
+    init: constant
+    value: 0.0
+  - name: I_app
+    init: constant
+    value: 0.0
+...
+
+---
+type: vertex
+modname: izhiaudio
+modtype: izhi_neuron
+param:
+  - name: a
+    value: 0.02
+  - name: b
+    value: 0.2
+  - name: c
+    value: -65
+  - name: d
+    value: 8
+state:
+  - name: v
+    init: constant
+    value: -65.0
+  - name: u
+    init: constant
+    value: -13.0
+  - name: I_syn
+    init: constant
+    value: 0.0
+  - name: I_app
+    init: constant
+    value: 0.0
+...
+
+---
+type: vertex
+modname: izhithal
+modtype: izhi_thalamus
+param:
+  - name: rng
+    value: 1000
+  - name: ampl
+    value: 18
+...
+
+---
+type: edge
+modname: exstdp
+modtype: izhi_syn_stdp
+param:
+  - name: wmax
+    value: 10
+  - name: tau
+    value: 20
+  - name: update
+    value: 1000
+state:
+  - name: delay
+    init: uniform interval
+    rep: tick
+    min: 1.0
+    max: 20.0
+    int: 1.0
+  - name: weight
+    init: constant
+    value: 6.0
+  - name: wdelta
+    init: constant
+    value: 0.0
+  - name: ptrace
+    init: constant
+    value: 0.0
+  - name: ntrace
+    init: constant
+    value: 0.0
+  - name: ptlast
+    init: constant
+    rep: tick
+    value: 0.0
+  - name: ntlast
+    init: constant
+    rep: tick
+    value: 0.0
+...
+
+---
+type: edge
+modname: instdp
+modtype: izhi_syn_nostdp
+param:
+state:
+  - name: delay
+    init: constant
+    rep: tick
+    value: 1.0
+  - name: weight
+    init: constant
+    value: -5.0
+...
+
+---
+type: edge
+modname: exnostdp
+modtype: izhi_syn_nostdp
+param:
+state:
+  - name: delay
+    init: uniform interval
+    rep: tick
+    min: 1.0
+    max: 20.0
+    int: 1.0
+  - name: weight
+    init: constant
+    value: 12.0
+...
+
+---
+type: edge
+modname: audioampl
+modtype: izhi_syn_ampl
+param:
+state:
+  - name: delay
+    init: constant
+    rep: tick
+    value: 1.0
+...
+
+---
+type: edge
+modname: thampl
+modtype: izhi_syn_ampl
+param:
+state:
+  - name: delay
+    init: constant
+    rep: tick
+    value: 1.0
+...

@@ -1,0 +1,337 @@
+/**
+ * Copyright (C) 2017 Felix Wang
+ *
+ * Simulation Tool for Asynchronous Cortical Streams (stacs)
+ */
+
+#include "network.h"
+
+
+/**************************************************************************
+* Charm++ Read-Only Variables
+**************************************************************************/
+extern /*readonly*/ tick_t tstep;
+extern /*readonly*/ idx_t nevtday;
+extern /*readonly*/ idx_t intdisp;
+extern /*readonly*/ idx_t intrec;
+extern /*readonly*/ tick_t tmax;
+extern /*readonly*/ tick_t tepisode;
+extern /*readonly*/ idx_t episodes;
+extern CkReduction::reducerType max_idx;
+
+
+/**************************************************************************
+* Reduction for Events
+**************************************************************************/
+
+CkReduction::reducerType net_event;
+/*initnode*/
+void registerNetEvent(void) {
+  net_event = CkReduction::addReducer(netEvent);
+}
+
+CkReductionMsg *netEvent(int nMsg, CkReductionMsg **msgs) {
+  std::vector<event_t> ret;
+  ret.clear();
+  for (int i = 0; i < nMsg; i++) {
+    for (std::size_t j = 0; j < msgs[i]->getSize()/sizeof(event_t); ++j) {
+      // Extract data and reduce 
+      ret.push_back(*((event_t *)msgs[i]->getData() + j));
+    }
+  }
+  return CkReductionMsg::buildNew(ret.size()*sizeof(event_t), ret.data());
+}
+
+
+/**************************************************************************
+* Estimation Recording
+**************************************************************************/
+
+// Send Estimates for writing
+//
+void Network::SaveEstimate() {
+  // Build record message for saving
+  mRecord* mrecord = BuildRecord();
+  netdata(datidx).SaveRecord(mrecord);
+
+  if (prtidx == 0) {
+    // Recording information
+    event_t event;
+    event.diffuse = 0;
+    event.type = EVENT_GROUP;
+    event.source = -1;
+    event.index = iter;
+    event.data = 0.0;
+    grplog.push_back(event);
+  }
+  // Reduce group information
+  contribute(grplog.size()*sizeof(event_t), grplog.data(), net_event, 
+      CkCallback(CkIndex_Netdata::SaveEstimate(NULL), netdata(0)));
+  grplog.clear();
+  
+  // Start a new cycle (data sent)
+  cyclepart.send();
+}
+
+// Send Estimates for writing (final)
+//
+void Network::SaveFinalEstimate() {
+  // Build record message for saving
+  mRecord* mrecord = BuildRecord();
+  netdata(datidx).SaveFinalRecord(mrecord);
+  
+  if (prtidx == 0) {
+    // Recording information
+    event_t event;
+    event.diffuse = 0;
+    event.type = EVENT_GROUP;
+    event.source = -1;
+    event.index = iter;
+    event.data = 0.0;
+    grplog.push_back(event);
+  }
+  // Reduce group information
+  contribute(grplog.size()*sizeof(event_t), grplog.data(), net_event, 
+      CkCallback(CkIndex_Netdata::SaveFinalEstimate(NULL), netdata(0)));
+  grplog.clear();
+}
+
+
+/**************************************************************************
+* Network Estimation Cycle
+**************************************************************************/
+
+// Main control flow
+//
+// TODO: Merge this into simulation cycle too sometime?
+void Network::CycleEst() {
+  // Check if simulation time is complete
+  if (tsim >= tmax && !episodic) {
+    // return control to main
+    contribute(0, NULL, CkReduction::nop);
+  }
+  // Recording
+  else if (iter == reciter && !episodic) {
+    // Bookkeeping
+    reciter += intrec;
+
+    // Send records
+    thisProxy(prtidx).SaveRecord();
+  }
+  // Check if episode is complete
+  else if (tsim >= teps && episodic) {
+    // Check if all episodes are complete
+    if (++epsidx >= episodes) {
+      // return control to main
+      contribute(0, NULL, CkReduction::nop);
+    }
+    else {
+      teps = tsim + tepisode;
+      
+      // Renew any episodic models
+      for (std::size_t i = 0; i < vtxmodidx.size(); ++i) {
+        model[vtxmodidx[i]]->Renew(state[i][0], stick[i][0]);
+      }
+      
+      // Clear out groups from current episode
+      for (std::size_t i = 0; i < grpwindow.size(); ++i) {
+        for (std::size_t p = 0; p < grpwindow[i].size(); ++p) {
+          grpwindow[i][p].clear();
+        }
+      }
+    
+      // Start a new cycle (after checked data sent)
+      thisProxy(prtidx).SaveRecord();
+    }
+  }
+#ifdef STACS_WITH_YARP
+  else if (syncing && synciter == IDX_T_MAX) {
+    // nop
+  }
+  else if (iter == synciter) {
+    if (!syncing) {
+      // Bookkkeeping
+      synciter = IDX_T_MAX;
+      syncing = true;
+      
+      idx_t contiter = iter;
+      // move control to sychronization callback
+      contribute(sizeof(idx_t), &contiter, max_idx);
+    }
+    else {
+      // Bookkkeeping
+      synciter = IDX_T_MAX;
+      
+      // Display synchronization information
+      if (prtidx == 0) {
+        CkPrintf("  Synchronized at iteration %" PRIidx "\n", iter);
+      }
+
+      // move control to sychronization callback
+      contribute(0, NULL, CkReduction::nop);
+    }
+  }
+#endif
+  // Simulate next cycle
+  else {
+    // Display iteration information
+    if (iter >= dispiter && prtidx == 0) {
+      dispiter += intdisp;
+      if (episodic) {
+        CkPrintf("  Estimating episode %" PRIidx "\n", epsidx);
+      }
+      else {
+        CkPrintf("  Estimating iteration %" PRIidx "\n", iter);
+        //CkPrintf("    Simulating time %" PRIrealsec " seconds\n", ((real_t) tsim)/(TICKS_PER_MS*1000));
+      }
+    }
+    
+    // Bookkeeping
+    idx_t evtday = iter%nevtday;
+    tick_t tstop = tsim + tstep;
+
+    // Clear event buffer
+    evtext.clear();
+    
+    // Redistribute any events (on new year)
+    if (evtday == 0) {
+      SortEventCalendar();
+    }
+    
+    // Check for periodic events
+    if (tsim >= tleap) {
+      LeapEvent();
+    }
+    
+    // Perform computation
+    for (std::size_t i = 0; i < vtxmodidx.size(); ++i) {
+      // Timing
+      tick_t tdrift = tsim;
+
+      // Sort events
+      std::sort(evtcal[i][evtday].begin(), evtcal[i][evtday].end());
+
+      // Perform events starting at beginning of step
+      std::vector<event_t>::iterator event = evtcal[i][evtday].begin();
+      while (event != evtcal[i][evtday].end() && event->diffuse <= tdrift) {
+        // edge events
+        if (event->index) {
+          model[edgmodidx[i][event->index-1]]->Jump(*event, state[i], stick[i], edgaux[edgmodidx[i][event->index-1]][vtxmodidx[i]]);
+        }
+        // vertex events
+        else {
+          model[vtxmodidx[i]]->Jump(*event, state[i], stick[i], vtxaux[i]);
+        }
+        ++event;
+      }
+
+      // Polychronization
+      EstimateGroup(i);
+
+      // Computation
+      while (tdrift < tstop) {
+        // Step through model drift (vertex)
+        tdrift += model[vtxmodidx[i]]->Step(tdrift, tstop - tdrift, state[i][0], stick[i][0], events);
+
+        // Handle generated events (if any)
+        if (events.size()) {
+          for (std::size_t e = 0; e < events.size(); ++e) {
+            HandleEvent(events[e], i);
+          }
+          // clear log for next time
+          events.clear();
+        }
+        
+        // Perform events up to tdrift
+        while (event != evtcal[i][evtday].end() && event->diffuse <= tdrift) {
+          // edge events
+          if (event->index) {
+            model[edgmodidx[i][event->index-1]]->Jump(*event, state[i], stick[i], edgaux[edgmodidx[i][event->index-1]][vtxmodidx[i]]);
+          }
+          // vertex events
+          else {
+            model[vtxmodidx[i]]->Jump(*event, state[i], stick[i], vtxaux[i]);
+          }
+          ++event;
+        }
+      }
+
+      // Clear event queue
+      evtcal[i][evtday].clear();
+    }
+
+    // Send messages to entire network
+    // TODO: Reduce communication due to monitoring
+    mEvent *mevent = BuildEvent();
+    thisProxy.CommStamp(mevent);
+
+    // Increment simulated time
+    tsim += tstep;
+
+    // Add new records
+    AddRecord();
+    
+    // Increment iteration
+    ++iter;
+  }
+}
+
+
+/**************************************************************************
+* Network Estimation Helpers
+**************************************************************************/
+
+// Estimate any group activations
+//
+void Network::EstimateGroup(idx_t i) {
+  for (std::size_t p = 0; p < grpstamps[i].size(); ++p) {
+    // Pop out any old stamps
+    while (!grpwindow[i][p].empty()) {
+      if (grpwindow[i][p].front().diffuse + grpdur[i][p] <= tsim) {
+        grpwindow[i][p].pop_front();
+      }
+      else {
+        break;
+      }
+    }
+    // Template event
+    event_t event;
+    event.diffuse = tsim;
+    event.type = EVENT_GROUP;
+    event.data = 0.0;
+    // Check for threshold number of stamps
+    // TODO: Threshold based off of excitatory neurons only?
+    if (grpwindow[i][p].size() > (grpstamps[i][p].size() / 2)) {
+      // Compute group activation
+      std::size_t nactive = 0;
+      std::deque<stamp_t>::iterator stamp = grpwindow[i][p].begin();
+      for (std::size_t t = 0; t < grpstamps[i][p].size(); ++t) {
+        while (stamp != grpwindow[i][p].end()) {
+          // TODO: Refine the acceptable jitter
+          if ((stamp->diffuse + grpdur[i][p] - tsim + 5 * TICKS_PER_MS == grpstamps[i][p][t].diffuse && stamp->source == grpstamps[i][p][t].source) ||
+              (stamp->diffuse + grpdur[i][p] - tsim + 4 * TICKS_PER_MS == grpstamps[i][p][t].diffuse && stamp->source == grpstamps[i][p][t].source) ||
+              (stamp->diffuse + grpdur[i][p] - tsim + 3 * TICKS_PER_MS == grpstamps[i][p][t].diffuse && stamp->source == grpstamps[i][p][t].source) ||
+              (stamp->diffuse + grpdur[i][p] - tsim + 2 * TICKS_PER_MS == grpstamps[i][p][t].diffuse && stamp->source == grpstamps[i][p][t].source) ||
+              (stamp->diffuse + grpdur[i][p] - tsim + TICKS_PER_MS == grpstamps[i][p][t].diffuse && stamp->source == grpstamps[i][p][t].source) ||
+              (stamp->diffuse + grpdur[i][p] - tsim == grpstamps[i][p][t].diffuse && stamp->source == grpstamps[i][p][t].source)) {
+            ++nactive;
+          }
+          else if (stamp->diffuse + grpdur[i][p] - tsim > grpstamps[i][p][t].diffuse) {
+            break;
+          }
+          ++stamp;
+        }
+      }
+      if (nactive > (grpstamps[i][p].size() / 2)) {
+        CkPrintf("PNG %" PRIidx ", %zu activated\n", vtxidx[i], p);
+        // Record group activation
+        event.source = vtxidx[i];
+        event.index = (idx_t) p;
+        event.data = ((real_t)(grpdur[i][p]/TICKS_PER_MS));
+        grplog.push_back(event);
+        // Clear window for repeats
+        grpwindow[i][p].clear();
+      }
+    }
+  }
+}

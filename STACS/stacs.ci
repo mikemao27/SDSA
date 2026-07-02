@@ -1,0 +1,56 @@
+mainmodule stacs {
+  extern module network;
+
+  readonly CProxy_Main mainProxy;
+  readonly CkGroupID mCastGrpId;
+  readonly unsigned int randseed;
+  readonly std::string netwkdir;
+  readonly int netparts;
+  readonly int netfiles;
+  readonly std::string filebase;
+  readonly std::string fileload;
+  readonly std::string filesave;
+  readonly std::string recordir;
+  readonly std::string groupdir;
+  readonly tick_t tstep;
+  readonly idx_t nevtday;
+  readonly idx_t intdisp;
+  readonly idx_t intrec;
+  readonly idx_t intbal;
+  readonly idx_t intsave;
+  readonly tick_t tmax;
+  readonly tick_t tepisode;
+  readonly idx_t episodes;
+  readonly int grpminlen;
+  readonly tick_t grpmaxdur;
+  readonly idx_t grpvtxmin;
+  readonly idx_t grpvtxmax;
+  
+  message mVtxs {
+    idx_t vtxdist[];
+    char rpcport[];
+    int xrpcport;
+  };
+  
+  mainchare Main {
+    entry Main(CkArgMsg *msg);
+    entry [reductiontarget] void Init();
+    entry [reductiontarget] void Start();
+    entry [reductiontarget] void Check();
+    entry [reductiontarget] void Stop();
+    entry [reductiontarget] void Halt();
+    
+    entry void SaveDist(CkReductionMsg *msg);
+    entry void SaveInitDist(CkReductionMsg *msg);
+    entry void SaveFinalDist(CkReductionMsg *msg);
+  };
+  
+  chare Stream {
+    entry Stream(mVtxs *msg);
+    entry void OpenRPC(CProxy_Network cpnet, const CkCallback &cbcycle, bool paused);
+    entry void CloseRPC();
+
+    entry [reductiontarget] void Sync(idx_t synciter);
+    entry [reductiontarget] void Pause();
+  };
+};

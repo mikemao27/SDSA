@@ -1,0 +1,70 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+*.decl.h
+*.def.h
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+stacs
+charmrun
+
+# Configuration
+*.yml
+*.model
+*.graph
+
+# Graph Files
+*.dist*
+*.metis*
+*.index.*
+*.coord.*
+*.adjcy.*
+*.state.*
+*.event.*
+*.part.*
+
+# Record Files
+*.evtlog.*
+*.record.*
+*.pnglog.*
+*.grplog.*
+
+# Input Files (fugu)
+files/
+
+# Polychronization Files
+*.group.*
+*.chart.*
+*.stamp.*
+*.route.*
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+.cache/
+
+# Temporary Files
+*.swp
+.DS_Store
