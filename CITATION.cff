@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use the SDSA software or the spiking self-attention ideas presented here in your work, please cite it as follows."
+type: software
+title: "SDSA: Spike-Driven Self-Attention"
+abstract: >
+  SDSA is a proof-of-concept spiking transformer: the standard transformer blueprint (patch embedding, self-attention, feed-forward blocks,
+  classification head) reimplemented so that every internal nonlinearity is a leaky integrate-and-fire (LIF) spiking neuron rather than a
+  continuous-valued activation. Query, key, and value projections are each passed through their own LIF neuron to produce true binary
+  (0.0/1.0) spike trains, and self-attention is computed directly over those spikes without a softmax. Because the spiking threshold
+  (Heaviside step) has no useful gradient almost anywhere, training uses a custom surrogate-gradient torch.autograd.Function (a fast-sigmoid
+  surrogate) in its backward pass. The model is validated on MNIST digit classification and is intentionally small enough to train locally
+  on a single Apple Silicon MacBook Air. SDSA is a hand-written learning exercise, not a reproduction of any specific published architecture
+  or a benchmark against dense transformers.
+authors:
+  - family-names: "Mao"
+    given-names: "Mike"
+    email: "mikemao1027@gmail.com"
+    affiliation: "Rice University"
+repository-code: "https://github.com/mikemao27/SDSA"
+license: Apache-2.0
+version: "1.0.0"
+keywords:
+  - "spiking neural networks"
+  - "transformers"
+  - "self-attention"
+  - "surrogate gradient"
+  - "leaky integrate-and-fire"
+  - "MNIST"
