@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 
 from .attention import SpikingSelfAttention
+from .baseline import DenseSelfAttention
 from .neurons import LIFNeuron
 
 ENERGY_PER_AC_PJ = 0.9
@@ -146,6 +147,21 @@ def _attention_hook(module: SpikingSelfAttention, inputs: tuple, output: torch.T
         # Q @ (K^T V): (N, d) @ (d, d) -> (N, d); Q is binary, K^T V is not -> use Q's rate.
         records.append(_record_from_counts(f"{name}.q_kv", float(N * d * d), float(T * H), True, q_rate))
 
+def _dense_attention_hook(module: DenseSelfAttention, inputs: tuple, output: torch.Tensor, records: list, name: str) -> None:
+    """
+    Forward hook for DenseSelfAttention: analytically accounts for its two internal matmuls (q @ k^T and attn @ v), which aren't nn.Modules and so
+    aren't caught by the generic Linear hook above. Both are always classified as MAC (a dense model has no binary spike tensors to discount),
+    which is what makes an EnergyReport computed on a DenseViT directly comparable to a SpikingTransformer's total_dense_reference_energy_pj:
+    both represent one full, undiscounted dense forward pass of the same architecture.
+    """
+    B, N, C = inputs[0].shape
+    H = module.num_heads
+    d = module.head_dim
+
+    # q @ k^T: (N, d) @ (d, N) -> (N, N); attn @ v: (N, N) @ (N, d) -> (N, d). Neither operand is binary, so both are MAC at rate 1.0.
+    records.append(_record_from_counts(f"{name}.qk", float(N * N * d), float(H), False, 1.0))
+    records.append(_record_from_counts(f"{name}.attn_v", float(N * N * d), float(H), False, 1.0))
+
 @contextmanager
 def _firing_rate_tracking(model: nn.Module) -> Iterator[None]:
     """
@@ -168,11 +184,11 @@ def estimate_model_energy(model: nn.Module, sample_input: torch.Tensor, num_time
     Run one instrumented forward pass of model on sample_input and return an EnergyReport estimating its per-sample energy consumption.
 
     model is put into eval() mode; every nn.Linear and nn.Conv2d submodule is hooked for generic AC/MAC classification, and every
-    SpikingSelfAttention submodule is separately hooked to account for its two internal matmuls. All LIF neurons in model have firing-rate tracking
-    temporarily enabled for the duration of this call (and restored to their previous setting afterward), so this is safe to call on a model that
-    was trained with track_firing_rate = False. num_timesteps is the model's T (used only to compute total_dense_reference_energy_pj, a "what would
-    a single dense timestep of this same architecture cost" reference number: every per-sample count derived from real tensor shapes above
-    already scales with T on its own).
+    SpikingSelfAttention or DenseSelfAttention submodule is separately hooked to account for its two internal matmuls. All LIF neurons in model
+    have firing-rate tracking temporarily enabled for the duration of this call (and restored to their previous setting afterward), so this is
+    safe to call on a model that was trained with track_firing_rate = False. num_timesteps is the model's T (pass 1 for a DenseViT, which has no
+    time dimension); it's used only to compute total_dense_reference_energy_pj, a "what would a single dense timestep of this same architecture
+    cost" reference number (every per-sample count derived from real tensor shapes above already scales with T on its own).
     """
     model.eval()
     records: list[LayerEnergyRecord] = []
@@ -186,6 +202,8 @@ def estimate_model_energy(model: nn.Module, sample_input: torch.Tensor, num_time
             hooks.append(module.register_forward_hook(functools.partial(_conv2d_hook, records = records, name = name)))
         elif isinstance(module, SpikingSelfAttention):
             hooks.append(module.register_forward_hook(functools.partial(_attention_hook, records = records, name = name)))
+        elif isinstance(module, DenseSelfAttention):
+            hooks.append(module.register_forward_hook(functools.partial(_dense_attention_hook, records = records, name = name)))
 
     try:
         with _firing_rate_tracking(model), torch.no_grad():

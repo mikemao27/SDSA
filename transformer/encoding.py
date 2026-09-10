@@ -25,8 +25,9 @@ def repeat_code(x: torch.Tensor, num_steps: int) -> torch.Tensor:
     Convert a static input into a time series by simply repeating it.
 
     This is a cheaper alternative to rate_code (sometimes called "direct" or "constant current" input coding): rather than stochastically sampling
-    spikes, the same real-valued input is presented at every time-step, and it's left to the first LIF layer in the model to convert it into spikes. 
-    x is the static input tensor, e.g. shape (B, C, H, W). num_steps is the number of time-steps T to generate. Returns: a tensor of shape 
-    (T, B, C, H, W), equal to `x` repeated T times along a new leading time dimension.
+    spikes, the same real-valued input is presented at every time-step, and it's left to the first LIF layer in the model to convert it into spikes.
+    x is the static input tensor of any shape, e.g. (B, C, H, W) for images or (B, N, num_channels) for SHD's temporal-chunk currents. num_steps is
+    the number of time-steps T to generate. Returns a tensor of shape (T, *x.shape), equal to `x` repeated T times along a new leading time
+    dimension.
     """
-    return x.unsqueeze(0).repeat(num_steps, 1, 1, 1, 1)
+    return x.unsqueeze(0).repeat(num_steps, *([1] * x.dim()))

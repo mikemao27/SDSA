@@ -50,9 +50,11 @@ def test_end_to_end_model_energy_runs() -> None:
     is strictly positive and whose total_dense_reference_energy_pj is also strictly positive.
     """
     from transformer.model import SpikingTransformer
+    from transformer.tokenizers import ImagePatchTokenizer
 
     torch.manual_seed(0)
-    model = SpikingTransformer(image_size = 28, patch_size = 7, in_channels = 1, num_classes = 10, embed_dim = 16, depth = 2, num_heads = 2, num_timesteps = 3)
+    tokenizer = ImagePatchTokenizer(image_size = 28, patch_size = 7, in_channels = 1, embed_dim = 16, num_timesteps = 3, coding = "repeat")
+    model = SpikingTransformer(tokenizer = tokenizer, num_classes = 10, embed_dim = 16, depth = 2, num_heads = 2)
     sample_input = torch.rand(1, 1, 28, 28)
 
     report = estimate_model_energy(model, sample_input, num_timesteps=3)

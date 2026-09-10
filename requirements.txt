@@ -1,2 +1,6 @@
 torch
 torchvision
+tonic
+pytest
+h5py
+matplotlib
