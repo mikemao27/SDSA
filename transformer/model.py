@@ -37,10 +37,11 @@ class SpikingTransformer(nn.Module):
     """
     A minimal spiking vision transformer for MNIST digit classification. image_size is the input image height/width. patch_size is the patch height/width
     used by the patch embedding. in_channels is the number of input image channels. num_classes is the number of output classes (10 for MNIST). 
-    embed_dim is the token embedding dimension. depth is the number of stacked SpikingTransformerBlock layers. num_heads is the number of attention 
-    heads per block. mlp_ratio is the hidden-dim multiplier for each block's SpikingMLP. num_timesteps is the number of simulation time-steps T used to 
-    encode each static image into a spike/current train. threshold is the firing threshold shared across all LIF neurons in the model. beta is the leak 
-    factor shared across all LIF neurons in the model.
+    embed_dim is the token embedding dimension. depth is the number of stacked SpikingTransformerBlock layers. num_heads is the number of attention
+    heads per block. mlp_ratio is the hidden-dim multiplier for each block's SpikingMLP. num_timesteps is the number of simulation time-steps T used to
+    encode each static image into a spike/current train. threshold is the firing threshold shared across all LIF neurons in the model. beta is the leak
+    factor shared across all LIF neurons in the model. attention_mode is passed through to every block's SpikingSelfAttention (either "linear",
+    the O(N) spike-driven form, or "quadratic", kept for comparison/ablation).
     """
     def __init__(
         self,
@@ -55,11 +56,14 @@ class SpikingTransformer(nn.Module):
         num_timesteps: int = 8,
         threshold: float = 1.0,
         beta: float = 0.9,
+        attention_mode: str = "linear",
     ) -> None:
         super().__init__()
         self.num_timesteps = num_timesteps
         self.patch_embedding = PatchEmbedding(image_size, patch_size, in_channels, embed_dim)
-        self.blocks = nn.ModuleList([SpikingTransformerBlock(embed_dim, num_heads, mlp_ratio, threshold, beta) for _ in range(depth)])
+        self.blocks = nn.ModuleList([
+            SpikingTransformerBlock(embed_dim, num_heads, mlp_ratio, threshold, beta, attention_mode = attention_mode) for _ in range(depth)
+        ])
         self.head = nn.Linear(embed_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

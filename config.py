@@ -25,6 +25,7 @@ class SpikingTransformerConfig:
     threshold: float # The LIF firing threshold.
     beta: float # The LIF leak/decay factor, in (0, 1).
     surrogate_alpha: float # The surrogate gradient steepness (see spiking_transformer/surrogate.py).
+    attention_mode: str = "linear" # Either "linear" (O(N) spike-driven attention) or "quadratic" (O(N^2), kept for comparison/ablation).
 
     # Training:
     batch_size: int

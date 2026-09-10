@@ -43,9 +43,9 @@ class SpikingTransformerBlock(nn.Module):
     """
     One spiking transformer block: residual spiking self-attention + residual spiking MLP.
 
-    embed_dim is the token embedding dimension. num_heads is the number of attention heads for SpikingSelfAttention. mlp_ratio is the multiplier 
-    applied to embed_dim to get the SpikingMLP hidden dim. threshold is the firing threshold shared across the block's LIF neurons. beta is the leak 
-    factor shared across the block's LIF neurons.
+    embed_dim is the token embedding dimension. num_heads is the number of attention heads for SpikingSelfAttention. mlp_ratio is the multiplier
+    applied to embed_dim to get the SpikingMLP hidden dim. threshold is the firing threshold shared across the block's LIF neurons. beta is the leak
+    factor shared across the block's LIF neurons. attention_mode is passed through to SpikingSelfAttention (either "linear" or "quadratic").
     """
     def __init__(
         self,
@@ -54,9 +54,10 @@ class SpikingTransformerBlock(nn.Module):
         mlp_ratio: float = 4.0,
         threshold: float = 1.0,
         beta: float = 0.9,
+        attention_mode: str = "linear",
     ) -> None:
         super().__init__()
-        self.attention = SpikingSelfAttention(embed_dim, num_heads, threshold = threshold, beta = beta)
+        self.attention = SpikingSelfAttention(embed_dim, num_heads, threshold = threshold, beta = beta, attention_mode = attention_mode)
         self.hidden_dim = int(embed_dim * mlp_ratio)
         self.mlp = SpikingMLP(embed_dim, self.hidden_dim, threshold = threshold, beta = beta)
 
