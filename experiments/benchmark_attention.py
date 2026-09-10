@@ -19,7 +19,7 @@ def time_attention(attention: SpikingSelfAttention, x: torch.Tensor, num_repeats
     """
     attention.eval()
     with torch.no_grad():
-        attention(x)  # warm-up
+        attention(x) # warm-up
 
         start = time.perf_counter()
         for _ in range(num_repeats):

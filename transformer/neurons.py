@@ -6,6 +6,8 @@ potential crosses a threshold, after which the potential is reset. This is the b
 activations (e.g. GELU, softmax) inside the transformer blocks, and it is also what turns the Q/K/V projections into true binary spike trains.
 """
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -87,6 +89,45 @@ class LIFNeuron(nn.Module):
 
         return spikes
 
+class PLIFNeuron(LIFNeuron):
+    """
+    Parametric LIF (PLIF) neuron: a LIFNeuron whose decay is a learnable parameter, reparameterized through a sigmoid so it always stays in the
+    valid (0, 1) range under gradient steps (Fang et al., "Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural
+    Networks", 2021). This fixes a real gap in plain LIFNeuron's own `learnable=True` path, where beta is a bare nn.Parameter that gradient steps
+    can push outside (0, 1) with no constraint.
+
+    Concretely, decay = sigmoid(w), where w is an nn.Parameter initialized to the inverse-sigmoid of init_beta (so the neuron starts at exactly
+    init_beta's decay rate). If num_channels is given, w (and therefore decay) is a per-channel vector of that width instead of a shared scalar,
+    letting different feature channels learn different time constants: it broadcasts against the trailing feature dimension of whatever tensor
+    this neuron is applied to. threshold is also made learnable (matching the intent of LIFNeuron's `learnable = True` flag). All other
+    arguments (threshold's initial value, alpha, reset_mechanism, track_firing_rate) behave exactly as in LIFNeuron.
+    """
+    def __init__(
+        self,
+        threshold: float = 1.0,
+        init_beta: float = 0.9,
+        alpha: float = 2.0,
+        reset_mechanism: str = "subtract",
+        num_channels: int | None = None,
+        track_firing_rate: bool = False,
+    ) -> None:
+        super().__init__(
+            threshold = threshold,
+            beta = init_beta,
+            alpha = alpha,
+            reset_mechanism = reset_mechanism,
+            learnable = False,
+            track_firing_rate = track_firing_rate,
+        )
+
+        init_w = math.log(init_beta / (1.0 - init_beta))
+        shape = (num_channels,) if num_channels is not None else ()
+        self.w = nn.Parameter(torch.full(shape, init_w))
+        self.threshold = nn.Parameter(torch.tensor(threshold))
+
+    def _decay(self) -> torch.Tensor:
+        return torch.sigmoid(self.w)
+
 def build_neuron(
     neuron_type: str,
     *,
@@ -99,10 +140,9 @@ def build_neuron(
 ) -> LIFNeuron:
     """
     Factory for constructing a spiking neuron layer by name, used by every call site in the model (SpikingSelfAttention, SpikingMLP) instead of
-    constructing LIFNeuron directly. neuron_type is "lif" for a plain LIFNeuron (channels is ignored, decay/threshold are shared scalars): other
-    neuron types (e.g. "plif", a per-channel learnable-decay variant) register themselves here as they're added. channels, if given, is the
-    feature width the neuron will be applied to (used by per-channel neuron types to size their learnable parameters). track_firing_rate is
-    forwarded to the constructed neuron. Raises ValueError for an unrecognized neuron_type.
+    constructing LIFNeuron directly. neuron_type is "lif" for a plain LIFNeuron (channels is ignored, decay/threshold are shared scalars) or "plif"
+    for a PLIFNeuron (channels, if given, sizes its per-channel learnable decay). channels, if given, is the feature width the neuron will be
+    applied to. track_firing_rate is forwarded to the constructed neuron. Raises ValueError for an unrecognized neuron_type.
     """
     if neuron_type == "lif":
         return LIFNeuron(
@@ -113,4 +153,14 @@ def build_neuron(
             track_firing_rate = track_firing_rate,
         )
 
-    raise ValueError(f"Unrecognized neuron_type: {neuron_type!r}. Supported types: 'lif'.")
+    if neuron_type == "plif":
+        return PLIFNeuron(
+            threshold = threshold,
+            init_beta = beta,
+            alpha = alpha,
+            reset_mechanism = reset_mechanism,
+            num_channels = channels,
+            track_firing_rate = track_firing_rate,
+        )
+
+    raise ValueError(f"Unrecognized neuron_type: {neuron_type!r}. Supported types: 'lif', 'plif'.")

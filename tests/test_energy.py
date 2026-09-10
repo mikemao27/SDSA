@@ -12,10 +12,10 @@ def test_binary_input_is_classified_ac() -> None:
     A bare nn.Linear(4, 8, bias = False) fed a binary input with exactly 50% of elements firing should be classified as an AC (spike-driven) op,
     with SOPs discounted by that 50% firing rate: total_sops == (4 * 8) * 1 application * 0.5, energy_pj == total_sops * ENERGY_PER_AC_PJ.
     """
-    model = nn.Linear(4, 8, bias=False)
+    model = nn.Linear(4, 8, bias = False)
     x = torch.tensor([[1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0]]) # (batch = 2, in_features = 4), exactly 50% ones.
 
-    report = estimate_model_energy(model, x, num_timesteps=1)
+    report = estimate_model_energy(model, x, num_timesteps = 1)
 
     assert len(report.layers) == 1
     record = report.layers[0]
@@ -31,7 +31,7 @@ def test_continuous_input_is_classified_mac() -> None:
     total_sops == (4 * 8) * 1 application * 1.0, energy_pj == total_sops * ENERGY_PER_MAC_PJ.
     """
     torch.manual_seed(0)
-    model = nn.Linear(4, 8, bias=False)
+    model = nn.Linear(4, 8, bias = False)
     x = torch.randn(2, 4)
 
     report = estimate_model_energy(model, x, num_timesteps=1)

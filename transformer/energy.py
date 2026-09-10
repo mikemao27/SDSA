@@ -62,7 +62,7 @@ class EnergyReport:
     MAC (i.e. dense, non-spiking) and evaluated once (T = 1) instead of num_timesteps times: an upper-bound baseline to compare the real,
     sparsity-discounted total_energy_pj against.
     """
-    layers: list[LayerEnergyRecord] = field(default_factory=list)
+    layers: list[LayerEnergyRecord] = field(default_factory = list)
     total_energy_pj: float = 0.0
     total_dense_reference_energy_pj: float = 0.0
 

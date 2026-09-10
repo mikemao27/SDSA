@@ -71,7 +71,7 @@ def evaluate(model: SpikingTransformer, loader: DataLoader, device: torch.device
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
         logits = model(images)
-        preds = logits.argmax(dim=1)
+        preds = logits.argmax(dim = 1)
         correct += (preds == labels).sum().item()
         total += labels.size(0)
 
