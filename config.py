@@ -25,10 +25,14 @@ class SpikingTransformerConfig:
     threshold: float # The LIF firing threshold.
     beta: float # The LIF leak/decay factor, in (0, 1).
     surrogate_alpha: float # The surrogate gradient steepness (see spiking_transformer/surrogate.py).
-    attention_mode: str = "linear" # Either "linear" (O(N) spike-driven attention) or "quadratic" (O(N^2), kept for comparison/ablation).
 
     # Training:
     batch_size: int
     learning_rate: float
     num_epochs: int
     device: str # "cpu" or "mps" (Apple Silicon GPU).
+
+    # Ablatable architecture/neuron choices (defaulted so existing call sites don't need updating):
+    attention_mode: str = "linear" # Either "linear" (O(N) spike-driven attention) or "quadratic" (O(N^2), kept for comparison/ablation).
+    neuron_type: str = "lif" # Spiking neuron implementation, e.g. "lif" or "plif" (see transformer/neurons.py::build_neuron).
+    track_firing_rate: bool = False # If True, every LIF neuron records its mean firing rate for energy accounting (see transformer/energy.py).

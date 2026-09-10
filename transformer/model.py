@@ -41,7 +41,9 @@ class SpikingTransformer(nn.Module):
     heads per block. mlp_ratio is the hidden-dim multiplier for each block's SpikingMLP. num_timesteps is the number of simulation time-steps T used to
     encode each static image into a spike/current train. threshold is the firing threshold shared across all LIF neurons in the model. beta is the leak
     factor shared across all LIF neurons in the model. attention_mode is passed through to every block's SpikingSelfAttention (either "linear",
-    the O(N) spike-driven form, or "quadratic", kept for comparison/ablation).
+    the O(N) spike-driven form, or "quadratic", kept for comparison/ablation). neuron_type selects the spiking neuron implementation shared across
+    the model (see transformer/neurons.py::build_neuron). track_firing_rate, if True, makes every LIF neuron in the model record its mean firing
+    rate for energy accounting (see transformer/energy.py::estimate_model_energy).
     """
     def __init__(
         self,
@@ -57,12 +59,24 @@ class SpikingTransformer(nn.Module):
         threshold: float = 1.0,
         beta: float = 0.9,
         attention_mode: str = "linear",
+        neuron_type: str = "lif",
+        track_firing_rate: bool = False,
     ) -> None:
         super().__init__()
         self.num_timesteps = num_timesteps
         self.patch_embedding = PatchEmbedding(image_size, patch_size, in_channels, embed_dim)
         self.blocks = nn.ModuleList([
-            SpikingTransformerBlock(embed_dim, num_heads, mlp_ratio, threshold, beta, attention_mode = attention_mode) for _ in range(depth)
+            SpikingTransformerBlock(
+                embed_dim,
+                num_heads,
+                mlp_ratio,
+                threshold,
+                beta,
+                attention_mode = attention_mode,
+                neuron_type = neuron_type,
+                track_firing_rate = track_firing_rate,
+            )
+            for _ in range(depth)
         ])
         self.head = nn.Linear(embed_dim, num_classes)
 

@@ -9,7 +9,7 @@ attention output: without a softmax, since spikes are already non-negative and s
 import torch
 import torch.nn as nn
 
-from .neurons import LIFNeuron
+from .neurons import build_neuron
 
 class SpikingSelfAttention(nn.Module):
     """
@@ -31,6 +31,8 @@ class SpikingSelfAttention(nn.Module):
     threshold is the firing threshold shared by the Q/K/V/output LIF neurons. beta is the leak factor shared by the Q/K/V/output LIF neurons.
     qkv_bias is whether the Q/K/V linear projections use a bias term. attn_scale is the scaling factor applied to attention scores before combining
     with V (analogous to the 1 / sqrt(d_k) scaling used in standard softmax attention). attention_mode is either "linear" or "quadratic" (see above).
+    neuron_type selects the spiking neuron implementation (see transformer/neurons.py::build_neuron), e.g. "lif" or "plif". track_firing_rate, if
+    True, makes every LIF neuron in this module record its mean firing rate for energy accounting (see transformer/energy.py).
     """
     def __init__(
         self,
@@ -41,6 +43,8 @@ class SpikingSelfAttention(nn.Module):
         qkv_bias: bool = False,
         attention_scale: float = 0.125,
         attention_mode: str = "linear",
+        neuron_type: str = "lif",
+        track_firing_rate: bool = False,
     ) -> None:
         if attention_mode not in {"linear", "quadratic"}:
             raise ValueError(f"attention_mode must be either 'linear' or 'quadratic'; we got {attention_mode!r} instead.")
@@ -62,12 +66,13 @@ class SpikingSelfAttention(nn.Module):
         self.k_linear = nn.Linear(self.embed_dim, self.embed_dim, bias = self.qkv_bias)
         self.v_linear = nn.Linear(self.embed_dim, self.embed_dim, bias = self.qkv_bias)
 
-        self.q_lif = LIFNeuron(threshold = self.threshold, beta = self.beta)
-        self.k_lif = LIFNeuron(threshold = self.threshold, beta = self.beta)
-        self.v_lif = LIFNeuron(threshold = self.threshold, beta = self.beta)
+        neuron_kwargs = dict(threshold = threshold, beta = beta, channels = embed_dim, track_firing_rate = track_firing_rate)
+        self.q_lif = build_neuron(neuron_type, **neuron_kwargs)
+        self.k_lif = build_neuron(neuron_type, **neuron_kwargs)
+        self.v_lif = build_neuron(neuron_type, **neuron_kwargs)
 
         self.proj_linear = nn.Linear(self.embed_dim, self.embed_dim)
-        self.proj_lif = LIFNeuron(threshold = self.threshold, beta = self.beta)
+        self.proj_lif = build_neuron(neuron_type, **neuron_kwargs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
